@@ -1,11 +1,17 @@
 // Requiring all the modules
 const express = require("express");
 const middleware = require("./middleware");
-const loginRoute = require("./routes/loginRoutes");
-const registerRoute = require("./routes/registerRoutes");
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const database = require("./database"); // Its only being used to connect to database and its value is never read
+
+// importing route files
+const loginRoute = require("./routes/loginRoutes");
+const registerRoute = require("./routes/registerRoutes");
+const logoutRoute = require("./routes/logoutRoutes");
+
+// importing the RESTful api files
+const postApiRoute = require("./routes/api/posts");
 
 // Creating the instance of Express
 const app = express();
@@ -26,7 +32,12 @@ app.use(
 // Routes implementation
 app.use("/login", loginRoute);
 app.use("/register", registerRoute);
+app.use("/logout", logoutRoute);
 
+// Route for API Routes
+app.use("/api/posts", postApiRoute);
+
+// Home Route
 app.get("/", middleware.requireLogin, (req, res, next) => {
   const payload = {
     pageTitle: "Home",
