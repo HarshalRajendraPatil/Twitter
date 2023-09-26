@@ -76,6 +76,33 @@ $(document).on("click", ".likeButton", (event) => {
   });
 });
 
+// Functionality for retweeting
+$(document).on("click", ".retweetButton", (event) => {
+  const button = $(event.target);
+  const postId = getPostIdFromElement(button);
+  if (postId === undefined) return;
+
+  $.ajax({
+    url: `/api/posts/${postId}/retweet`,
+    type: "POST",
+    success: (postData) => {
+      // Showing the no. of retweets the post has got
+      if (postData.retweetUsers.length === 0) {
+        button.find("span").text("");
+      } else {
+        button.find("span").text(postData.retweetUsers.length);
+      }
+
+      // Setting the colour of the like button based on if the user has liked the post
+      if (postData.retweetUsers.includes(userLoggedIn._id)) {
+        button.addClass("active");
+      } else {
+        button.removeClass("active");
+      }
+    },
+  });
+});
+
 // Function to get the id of the post tat the user likes
 function getPostIdFromElement(element) {
   const isRoot = element.hasClass("post");
@@ -89,6 +116,15 @@ function getPostIdFromElement(element) {
 
 // function for creating the html for the new post that will be prepended once submitted.
 function createPostHtml(postData) {
+  if (postData === null) return alert("Post object is null");
+
+  // Check is the post is retweet or not
+  const isRetweet = postData.retweetData !== undefined;
+
+  const retweetedBy = isRetweet ? postData.postedBy.username : null;
+
+  postData = isRetweet ? postData.retweetData : postData;
+
   // Getting the information of the posted user
   const { postedBy } = postData;
 
@@ -103,13 +139,25 @@ function createPostHtml(postData) {
   // Setting the time at which user posts the post
   const timestamp = timeDifference(new Date(), new Date(postData.createdAt));
 
-  // Setting the status of like button base on based on if the postData array contains the logged in user id.
+  // Setting the status of like button based on if the postData array contains the logged in user id.
   const likeButtonActiveClass = postData.likes.includes(userLoggedIn._id)
     ? "active"
     : "";
 
+  // Setting the status of retweet button based on if the postData array contains the logged in user id.
+  const retweetButtonActiveClass = postData.retweetUsers.includes(
+    userLoggedIn._id
+  )
+    ? "active"
+    : "";
+
+  let retweetText = "";
+  if (isRetweet) {
+    retweetText = `<span><i class="fa-solid fa-retweet"></i> Retweeted by <a href='/profile/${retweetedBy}'>@${retweetedBy}</a></span>`;
+  }
   // returns the html
   return `<div class="post" data-id="${postData._id}">
+            <div class="postActionContainer">${retweetText}</div>
             <div class="mainContentContainer">
               <div class="userImageContainer">
                 <img src=${postedBy.profilePic}>
@@ -132,8 +180,9 @@ function createPostHtml(postData) {
                     </button>
                   </div>
                   <div class="postButtonContainer green">
-                    <button class="retweet">
+                    <button class="retweetButton ${retweetButtonActiveClass}">
                       <i class="fa-solid fa-retweet"></i>
+                      <span>${postData.retweetUsers.length || ""}</span>
                     </button>
                   </div>
                   <div class="postButtonContainer red">

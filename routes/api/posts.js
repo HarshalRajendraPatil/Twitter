@@ -10,9 +10,11 @@ const router = express.Router();
 router.get("/", async (req, res, next) => {
   try {
     // Getting all the posts from the database and embedding the user info
-    const results = await Post.find()
+    let results = await Post.find()
       .populate("postedBy")
+      .populate("retweetData")
       .sort({ createdAt: -1 });
+    results = await User.populate(results, { path: "retweetData.postedBy" });
     return res.status(200).send(results);
   } catch (err) {
     return res.status(500).send("Could not load the posts. Try again later");
@@ -47,6 +49,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+// Route for liking the post
 router.put("/:id/like", async (req, res, next) => {
   const postId = req.params.id;
   const userId = req.session.user._id;
@@ -78,6 +81,69 @@ router.put("/:id/like", async (req, res, next) => {
       postId,
       {
         [option]: { likes: userId },
+      },
+      { new: true }
+    );
+  } catch (err) {
+    console.log(err.message);
+    return res.sendStatus(400);
+  }
+
+  res.status(200).send(post);
+});
+
+// Route for retweeting the post
+router.post("/:id/retweet", async (req, res, next) => {
+  const postId = req.params.id;
+  const userId = req.session.user._id;
+  let deletedPost;
+
+  // Try and delete retweet
+  try {
+    deletedPost = await Post.findOneAndDelete({
+      postedBy: userId,
+      retweetData: postId,
+    });
+  } catch (err) {
+    res.sendStatus(400);
+    return console.log(err.message);
+  }
+
+  // Deciding the operator base of if the user has already retweeted the post
+  const option = deletedPost != null ? "$pull" : "$addToSet";
+
+  let repost = deletedPost;
+
+  // Creating the retweet post
+  if (repost === null) {
+    try {
+      repost = await Post.create({ postedBy: userId, retweetData: postId });
+    } catch (err) {
+      res.sendStatus(400);
+      return console.log(err.message);
+    }
+  }
+
+  // Insert user retweet
+  try {
+    req.session.user = await User.findByIdAndUpdate(
+      userId,
+      {
+        [option]: { retweets: repost._id },
+      },
+      { new: true }
+    );
+  } catch (err) {
+    console.log(err.message);
+    return res.sendStatus(400);
+  }
+
+  // Inserting in post retweet
+  try {
+    var post = await Post.findByIdAndUpdate(
+      postId,
+      {
+        [option]: { retweetUsers: userId },
       },
       { new: true }
     );

@@ -6,6 +6,9 @@
   --greyText: rgb(101, 109, 134);
   --greyButtonText: rgba(0, 0, 0, 0.34);
   --red: rgb(226, 34, 94);
+  --redBackground: rgba(226, 34, 94, 0.2);
+  --green: rgb(23, 191, 99);
+  --greenBackground: rgba(23, 191, 99, 0.2);
   --spacing: 15px;
 }
 
@@ -184,4 +187,29 @@ button span {
 
 .postButtonContainer.red button.active {
   color: var(--red);
+}
+
+.postButtonContainer.red button:hover {
+  color: var(--red);
+  background-color: var(--redBackground);
+}
+
+.postButtonContainer.green button.active {
+  color: var(--green);
+}
+
+.postButtonContainer.green button:hover {
+  color: var(--green);
+  background-color: var();
+}
+
+.postActionContainer {
+  padding-left: 35px;
+  padding-bottom: 10px;
+  font-size: 13px;
+  color: var(--greyText);
+}
+
+.postActionContainer a:hover {
+  text-decoration: underline;
 }
