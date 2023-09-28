@@ -6,19 +6,29 @@ const Post = require("../../schemas/postSchema");
 // Creating the router that will be exported to the app
 const router = express.Router();
 
-// Route for login on GET request
+// Route for getting all the posts
 router.get("/", async (req, res, next) => {
-  try {
-    // Getting all the posts from the database and embedding the user info
-    let results = await Post.find()
-      .populate("postedBy")
-      .populate("retweetData")
-      .sort({ createdAt: -1 });
-    results = await User.populate(results, { path: "retweetData.postedBy" });
-    return res.status(200).send(results);
-  } catch (err) {
-    return res.status(500).send("Could not load the posts. Try again later");
+  const results = await getPosts({});
+  return res.status(200).send(results);
+});
+
+// Route for getting the post data based on its id
+router.get("/:id", async (req, res, next) => {
+  const postId = req.params.id;
+  let postData = await getPosts({ _id: postId });
+  postData = postData[0];
+
+  const results = {
+    postData,
+  };
+
+  if (postData.replyTo !== undefined) {
+    results.replyTo = postData.replyTo;
   }
+
+  results.replies = await getPosts({ replyTo: postId });
+
+  return res.status(200).send(results);
 });
 
 // Route for login on POST request
@@ -35,6 +45,10 @@ router.post("/", async (req, res, next) => {
       content: req.body.content,
       postedBy: req.session.user,
     };
+
+    if (req.body.replyTo) {
+      postData.replyTo = req.body.replyTo;
+    }
 
     // Saving the new post into the database
     let newPost = await Post.create(postData);
@@ -154,6 +168,32 @@ router.post("/:id/retweet", async (req, res, next) => {
 
   res.status(200).send(post);
 });
+
+router.delete("/:id", async (req, res, next) => {
+  try {
+    await Post.findByIdAndDelete(req.params.id);
+  } catch (err) {
+    console.log(err.message);
+    return res.sendStatus(400);
+  }
+});
+
+async function getPosts(filter) {
+  let results;
+  try {
+    // Getting all the posts from the database and embedding the user info
+    results = await Post.find(filter)
+      .populate("postedBy")
+      .populate("retweetData")
+      .populate("replyTo")
+      .sort({ createdAt: -1 });
+  } catch (err) {
+    return console.log(err.message);
+  }
+
+  results = await User.populate(results, { path: "replyTo.postedBy" });
+  return await User.populate(results, { path: "retweetData.postedBy" });
+}
 
 // Exporting the router to the app
 module.exports = router;

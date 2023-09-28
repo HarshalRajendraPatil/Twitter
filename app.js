@@ -9,6 +9,7 @@ const database = require("./database"); // Its only being used to connect to dat
 const loginRoute = require("./routes/loginRoutes");
 const registerRoute = require("./routes/registerRoutes");
 const logoutRoute = require("./routes/logoutRoutes");
+const postRoute = require("./routes/postRoutes");
 
 // importing the RESTful api files
 const postApiRoute = require("./routes/api/posts");
@@ -33,6 +34,7 @@ app.use(
 app.use("/login", loginRoute);
 app.use("/register", registerRoute);
 app.use("/logout", logoutRoute);
+app.use("/post", middleware.requireLogin, postRoute);
 
 // Route for API Routes
 app.use("/api/posts", postApiRoute);

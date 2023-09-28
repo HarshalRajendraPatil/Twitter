@@ -170,6 +170,10 @@ button span {
   padding: 2px 5px;
 }
 
+.postContentContainer .header {
+  display: flex;
+}
+
 .header a:hover {
   text-decoration: underline;
 }
@@ -212,4 +216,32 @@ button span {
 
 .postActionContainer a:hover {
   text-decoration: underline;
+}
+
+.modal .postFormContainer {
+  border: none;
+  padding: 0;
+  padding-top: var(--spacing);
+}
+
+.modal .post {
+  padding: 0;
+  padding-bottom: var(--spacing);
+}
+
+.replyFlag {
+  margin-bottom: 5px;
+}
+
+.replyFlag a {
+  color: var(--blue);
+}
+
+.post.largeFont .postBody,
+.post .largeFont .postFooter {
+  font-size: 23px;
+}
+
+.postContentContainer .header .date {
+  flex: 1;
 }
