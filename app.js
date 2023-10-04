@@ -10,6 +10,7 @@ const loginRoute = require("./routes/loginRoutes");
 const registerRoute = require("./routes/registerRoutes");
 const logoutRoute = require("./routes/logoutRoutes");
 const postRoute = require("./routes/postRoutes");
+const profileRoute = require("./routes/profileRoutes");
 
 // importing the RESTful api files
 const postApiRoute = require("./routes/api/posts");
@@ -35,6 +36,7 @@ app.use("/login", loginRoute);
 app.use("/register", registerRoute);
 app.use("/logout", logoutRoute);
 app.use("/post", middleware.requireLogin, postRoute);
+app.use("/profile", middleware.requireLogin, profileRoute);
 
 // Route for API Routes
 app.use("/api/posts", postApiRoute);

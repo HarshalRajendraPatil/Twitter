@@ -8,7 +8,13 @@ const router = express.Router();
 
 // Route for getting all the posts
 router.get("/", async (req, res, next) => {
-  const results = await getPosts({});
+  const searchObject = req.query;
+  if (searchObject.isReply !== undefined) {
+    const isReply = searchObject.isReply == "true";
+    searchObject.replyTo = { $exists: isReply };
+    delete searchObject.isReply;
+  }
+  const results = await getPosts(searchObject);
   return res.status(200).send(results);
 });
 
