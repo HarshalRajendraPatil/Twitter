@@ -4,7 +4,7 @@ const express = require("express");
 // Creating the router that will be exported to the app
 const router = express.Router();
 
-// Route for login on GET request
+// Route for getting the page for clicked post with all its replies
 router.get("/:id", (req, res, next) => {
   const payload = {
     pageTitle: "View post",

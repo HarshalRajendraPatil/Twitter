@@ -9,11 +9,35 @@ const router = express.Router();
 // Route for getting all the posts
 router.get("/", async (req, res, next) => {
   const searchObject = req.query;
+
+  // query for getting reply post
   if (searchObject.isReply !== undefined) {
     const isReply = searchObject.isReply == "true";
     searchObject.replyTo = { $exists: isReply };
     delete searchObject.isReply;
   }
+
+  // query for getting only posts from the followings
+  if (searchObject.followingOnly !== undefined) {
+    const followingOnly = searchObject.followingOnly == "true";
+
+    if (followingOnly) {
+      let objectIds = [];
+
+      if (!req.session.user.following) req.session.user.following = [];
+
+      req.session.user.following.forEach((user) => {
+        objectIds.push(user);
+      });
+
+      objectIds.push(req.session.user._id);
+
+      searchObject.postedBy = { $in: objectIds };
+    }
+
+    delete searchObject.followingOnly;
+  }
+
   const results = await getPosts(searchObject);
   return res.status(200).send(results);
 });

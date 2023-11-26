@@ -3,7 +3,7 @@ const express = require("express");
 const middleware = require("./middleware");
 const bodyParser = require("body-parser");
 const session = require("express-session");
-const database = require("./database"); // Its only being used to connect to database and its value is never read
+require("./database"); // Its only being used to connect to database and its value is never read
 
 // importing route files
 const loginRoute = require("./routes/loginRoutes");
@@ -13,7 +13,8 @@ const postRoute = require("./routes/postRoutes");
 const profileRoute = require("./routes/profileRoutes");
 
 // importing the RESTful api files
-const postApiRoute = require("./routes/api/posts");
+const postsApiRoute = require("./routes/api/posts");
+const usersApiRoute = require("./routes/api/users");
 
 // Creating the instance of Express
 const app = express();
@@ -25,7 +26,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static(`${__dirname}/public`));
 app.use(
   session({
-    secret: "my application",
+    secret: "Thomas Shelby",
     resave: true,
     saveUninitialized: false,
   })
@@ -39,7 +40,8 @@ app.use("/post", middleware.requireLogin, postRoute);
 app.use("/profile", middleware.requireLogin, profileRoute);
 
 // Route for API Routes
-app.use("/api/posts", postApiRoute);
+app.use("/api/posts", postsApiRoute);
+app.use("/api/users", usersApiRoute);
 
 // Home Route
 app.get("/", middleware.requireLogin, (req, res, next) => {

@@ -29,6 +29,20 @@ router.get("/:username/replies", async (req, res, next) => {
   res.status(200).render("profilePage", payload);
 });
 
+// Route for profile page with specific id on GET request for following
+router.get("/:username/following", async (req, res, next) => {
+  const payload = await getPayload(req.params.username, req.session.user);
+  payload.selectedTab = "following";
+  res.status(200).render("followersAndFollowing", payload);
+});
+
+// Route for profile page with specific id on GET request for followers
+router.get("/:username/followers", async (req, res, next) => {
+  const payload = await getPayload(req.params.username, req.session.user);
+  payload.selectedTab = "followers";
+  res.status(200).render("followersAndFollowing", payload);
+});
+
 // Create the payload based on the existing user
 async function getPayload(username, userLoggedIn) {
   let user = await User.findOne({ username });
