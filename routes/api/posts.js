@@ -6,17 +6,59 @@ const Post = require("../../schemas/postSchema");
 // Creating the router that will be exported to the app
 const router = express.Router();
 
-// Route for login on GET request
+// Route for getting all the posts
 router.get("/", async (req, res, next) => {
-  try {
-    // Getting all the posts from the database and embedding the user info
-    const results = await Post.find()
-      .populate("postedBy")
-      .sort({ createdAt: -1 });
-    return res.status(200).send(results);
-  } catch (err) {
-    return res.status(500).send("Could not load the posts. Try again later");
+  const searchObject = req.query;
+
+  // query for getting reply post
+  if (searchObject.isReply !== undefined) {
+    const isReply = searchObject.isReply == "true";
+    searchObject.replyTo = { $exists: isReply };
+    delete searchObject.isReply;
   }
+
+  // query for getting only posts from the followings
+  if (searchObject.followingOnly !== undefined) {
+    const followingOnly = searchObject.followingOnly == "true";
+
+    if (followingOnly) {
+      let objectIds = [];
+
+      if (!req.session.user.following) req.session.user.following = [];
+
+      req.session.user.following.forEach((user) => {
+        objectIds.push(user);
+      });
+
+      objectIds.push(req.session.user._id);
+
+      searchObject.postedBy = { $in: objectIds };
+    }
+
+    delete searchObject.followingOnly;
+  }
+
+  const results = await getPosts(searchObject);
+  return res.status(200).send(results);
+});
+
+// Route for getting the post data based on its id
+router.get("/:id", async (req, res, next) => {
+  const postId = req.params.id;
+  let postData = await getPosts({ _id: postId });
+  postData = postData[0];
+
+  const results = {
+    postData,
+  };
+
+  if (postData.replyTo !== undefined) {
+    results.replyTo = postData.replyTo;
+  }
+
+  results.replies = await getPosts({ replyTo: postId });
+
+  return res.status(200).send(results);
 });
 
 // Route for login on POST request
@@ -34,6 +76,10 @@ router.post("/", async (req, res, next) => {
       postedBy: req.session.user,
     };
 
+    if (req.body.replyTo) {
+      postData.replyTo = req.body.replyTo;
+    }
+
     // Saving the new post into the database
     let newPost = await Post.create(postData);
 
@@ -47,6 +93,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+// Route for liking the post
 router.put("/:id/like", async (req, res, next) => {
   const postId = req.params.id;
   const userId = req.session.user._id;
@@ -88,6 +135,95 @@ router.put("/:id/like", async (req, res, next) => {
 
   res.status(200).send(post);
 });
+
+// Route for retweeting the post
+router.post("/:id/retweet", async (req, res, next) => {
+  const postId = req.params.id;
+  const userId = req.session.user._id;
+  let deletedPost;
+
+  // Try and delete retweet
+  try {
+    deletedPost = await Post.findOneAndDelete({
+      postedBy: userId,
+      retweetData: postId,
+    });
+  } catch (err) {
+    res.sendStatus(400);
+    return console.log(err.message);
+  }
+
+  // Deciding the operator base of if the user has already retweeted the post
+  const option = deletedPost != null ? "$pull" : "$addToSet";
+
+  let repost = deletedPost;
+
+  // Creating the retweet post
+  if (repost === null) {
+    try {
+      repost = await Post.create({ postedBy: userId, retweetData: postId });
+    } catch (err) {
+      res.sendStatus(400);
+      return console.log(err.message);
+    }
+  }
+
+  // Insert user retweet
+  try {
+    req.session.user = await User.findByIdAndUpdate(
+      userId,
+      {
+        [option]: { retweets: repost._id },
+      },
+      { new: true }
+    );
+  } catch (err) {
+    console.log(err.message);
+    return res.sendStatus(400);
+  }
+
+  // Inserting in post retweet
+  try {
+    var post = await Post.findByIdAndUpdate(
+      postId,
+      {
+        [option]: { retweetUsers: userId },
+      },
+      { new: true }
+    );
+  } catch (err) {
+    console.log(err.message);
+    return res.sendStatus(400);
+  }
+
+  res.status(200).send(post);
+});
+
+router.delete("/:id", async (req, res, next) => {
+  try {
+    await Post.findByIdAndDelete(req.params.id);
+  } catch (err) {
+    console.log(err.message);
+    return res.sendStatus(400);
+  }
+});
+
+async function getPosts(filter) {
+  let results;
+  try {
+    // Getting all the posts from the database and embedding the user info
+    results = await Post.find(filter)
+      .populate("postedBy")
+      .populate("retweetData")
+      .populate("replyTo")
+      .sort({ createdAt: -1 });
+  } catch (err) {
+    return console.log(err.message);
+  }
+
+  results = await User.populate(results, { path: "replyTo.postedBy" });
+  return await User.populate(results, { path: "retweetData.postedBy" });
+}
 
 // Exporting the router to the app
 module.exports = router;

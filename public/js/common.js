@@ -1,13 +1,18 @@
-// Enabling sumbit button only when uses has input some value in to the text area
-$("#postTextarea").keyup((event) => {
+// Enabling sumbit button only when uses has input some value in to the text area for either post form or reply form
+$("#postTextarea, #replyTextarea").keyup((event) => {
   // Getting on the element on which event has occured
   const textBox = $(event.target);
 
   // Getting the value of the textarea
   const value = textBox.val().trim();
 
+  // checking if the textarea is for reply form or the post form
+  const isModal = textBox.parents(".modal").length == 1;
+
   // Checking for the availability of the submit button
-  const submitButton = $("#submitPostButton");
+  const submitButton = isModal
+    ? $("#submitReplyButton")
+    : $("#submitPostButton");
   if (submitButton.length == 0) return alert("No sumbit button found");
 
   // enabling submit button on when text area has a value
@@ -18,18 +23,26 @@ $("#postTextarea").keyup((event) => {
   }
 });
 
-// Implementing the functionality for the post button of the post form.
-$("#submitPostButton").click((event) => {
+// Implementing the functionality for the post button of the post form and also the reply form.
+$("#submitPostButton, #submitReplyButton").click((event) => {
   // Getting on the element on which event has occured
   const button = $(event.target);
 
+  const isModal = button.parents(".modal").length == 1;
+
   // Selecting the text area of the post form
-  const textBox = $("#postTextarea");
+  const textBox = isModal ? $("#replyTextarea") : $("#postTextarea");
 
   // creating the object with the value of the post as a content porperty which will be send to the server
   const data = {
     content: textBox.val(),
   };
+
+  if (isModal) {
+    const id = button.data().id;
+    if (id === null) return alert("button id is null");
+    data.replyTo = id;
+  }
 
   // clearing the text area
   textBox.val("");
@@ -39,12 +52,49 @@ $("#submitPostButton").click((event) => {
 
   // Making a post request to the '/api/posts' with the data object and a callback function which gets the first parameter as the outputted value from the server.
   $.post("/api/posts", data, (postData) => {
-    // Gets the html from the createPostHtml function
-    const html = createPostHtml(postData);
+    if (postData.replyTo) {
+      location.reload();
+    } else {
+      // Gets the html from the createPostHtml function
+      const html = createPostHtml(postData);
 
-    // prepending the new post to the top of the posts list
-    $(".postsContainer").prepend(html);
+      // prepending the new post to the top of the posts list
+      $(".postsContainer").prepend(html);
+    }
   });
+});
+
+// ajax request to load the post on which is user want to reply to. The show.bs.modal is the inbuild bootstrap method which fires the callback function when the modal is opened.
+$("#replyModal").on("show.bs.modal", (event) => {
+  const button = $(event.relatedTarget);
+  const postId = getPostIdFromElement(button);
+  $("#submitReplyButton").data("id", postId);
+
+  $.get(`/api/posts/${postId}`, (results) => {
+    // Uses the outputPosts function to create html for the incoming data from the server
+    outputPosts(results.postData, $("#originalPostContainer"));
+  });
+});
+
+// Remove the content of the popup when the popup closes. The hidden.bs.modal is the inbuild bootstrap method which fires the callback function when teh modal closes down.
+$("#replyModal").on("hidden.bs.modal", () =>
+  $("#originalPostContainer").html("")
+);
+
+$("#deletePostModal").on("show.bs.modal", (event) => {
+  const button = $(event.relatedTarget);
+  const postId = getPostIdFromElement(button);
+  $("#deletePostButton").data("id", postId);
+});
+
+$("#deletePostButton").click((event) => {
+  const postId = $(event.target).data("id");
+
+  $.ajax({
+    url: `/api/posts/${postId}`,
+    type: "DELETE",
+  });
+  location.reload();
 });
 
 // Functionality for like button
@@ -76,6 +126,71 @@ $(document).on("click", ".likeButton", (event) => {
   });
 });
 
+// Functionality for retweeting
+$(document).on("click", ".retweetButton", (event) => {
+  const button = $(event.target);
+  const postId = getPostIdFromElement(button);
+  if (postId === undefined) return;
+
+  $.ajax({
+    url: `/api/posts/${postId}/retweet`,
+    type: "POST",
+    success: (postData) => {
+      // Showing the no. of retweets the post has got
+      if (postData.retweetUsers.length === 0) {
+        button.find("span").text("");
+      } else {
+        button.find("span").text(postData.retweetUsers.length);
+      }
+
+      // Setting the colour of the like button based on if the user has liked the post
+      if (postData.retweetUsers.includes(userLoggedIn._id)) {
+        button.addClass("active");
+      } else {
+        button.removeClass("active");
+      }
+    },
+  });
+});
+
+$(document).on("click", ".post", (event) => {
+  const element = $(event.target);
+  const postId = getPostIdFromElement(element);
+
+  if (postId !== undefined && !element.is("button ")) {
+    window.location.href = "/post/" + postId;
+  }
+});
+
+$(document).on("click", ".followButton", (event) => {
+  const button = $(event.target);
+  const userId = button.data().user;
+
+  $.ajax({
+    url: `/api/users/${userId}/follow`,
+    type: "PUT",
+    success: (data, status, xhr) => {
+      if (xhr.status == 404) alert("User not found");
+
+      var difference = 1;
+      if (data.following && data.following.includes(userId)) {
+        button.addClass("following");
+        button.text("Following");
+      } else {
+        button.removeClass("following");
+        button.text("Follow");
+        difference = -1;
+      }
+
+      const followersLabel = $("#followersValue");
+      if (followersLabel.length != 0) {
+        const followersText = followersLabel.text();
+        followersLabel.text(Number(followersText) + difference);
+      }
+    },
+  });
+});
+
 // Function to get the id of the post tat the user likes
 function getPostIdFromElement(element) {
   const isRoot = element.hasClass("post");
@@ -88,7 +203,16 @@ function getPostIdFromElement(element) {
 }
 
 // function for creating the html for the new post that will be prepended once submitted.
-function createPostHtml(postData) {
+function createPostHtml(postData, largeFont = false) {
+  if (postData === null) return alert("Post object is null");
+
+  // Check is the post is retweet or not
+  const isRetweet = postData.retweetData !== undefined;
+
+  const retweetedBy = isRetweet ? postData.postedBy.username : null;
+
+  postData = isRetweet ? postData.retweetData : postData;
+
   // Getting the information of the posted user
   const { postedBy } = postData;
 
@@ -103,13 +227,40 @@ function createPostHtml(postData) {
   // Setting the time at which user posts the post
   const timestamp = timeDifference(new Date(), new Date(postData.createdAt));
 
-  // Setting the status of like button base on based on if the postData array contains the logged in user id.
+  // Setting the status of like button based on if the postData array contains the logged in user id.
   const likeButtonActiveClass = postData.likes.includes(userLoggedIn._id)
     ? "active"
     : "";
 
+  // Setting the status of retweet button based on if the postData array contains the logged in user id.
+  const retweetButtonActiveClass = postData.retweetUsers.includes(
+    userLoggedIn._id
+  )
+    ? "active"
+    : "";
+
+  const largeFontClass = largeFont ? "largeFont" : "";
+
+  let retweetText = "";
+  if (isRetweet) {
+    retweetText = `<span><i class="fa-solid fa-retweet"></i> Retweeted by <a href='/profile/${retweetedBy}'>@${retweetedBy}</a></span>`;
+  }
+
+  let replyFlag = "";
+  if (postData.replyTo && postData.replyTo._id) {
+    if (!postData.replyTo._id) return alert("Reply to is not populated");
+
+    const replyToUsername = postData.replyTo.postedBy.username;
+    replyFlag = `<div class="replyFlag">Replying to <a href="/profile/${replyToUsername}">@${replyToUsername}</a></div>`;
+  }
+
+  let buttons = "";
+  if (postData.postedBy._id == userLoggedIn._id) {
+    buttons = `<button data-id="${postData._id}" data-bs-toggle="modal" data-bs-target="#deletePostModal"><i class="fa-solid fa-times"></i></button>`;
+  }
   // returns the html
-  return `<div class="post" data-id="${postData._id}">
+  return `<div class="post ${largeFontClass}" data-id="${postData._id}">
+            <div class="postActionContainer">${retweetText}</div>
             <div class="mainContentContainer">
               <div class="userImageContainer">
                 <img src=${postedBy.profilePic}>
@@ -121,19 +272,22 @@ function createPostHtml(postData) {
                   }" class="displayName">${displayName}</a>
                   <span class="username">@${postedBy.username}</span>
                   <span class="date">${timestamp}</span>
+                  ${buttons}
                 </div>
+                ${replyFlag}
                 <div class="postBody">
                   <span>${postData.content}</span>
                 </div>
                 <div class="postFooter">
                   <div class="postButtonContainer">
-                    <button>
+                    <button data-bs-toggle="modal" data-bs-target="#replyModal">
                       <i class="fa-regular fa-comment"></i>
                     </button>
                   </div>
                   <div class="postButtonContainer green">
-                    <button class="retweet">
+                    <button class="retweetButton ${retweetButtonActiveClass}">
                       <i class="fa-solid fa-retweet"></i>
+                      <span>${postData.retweetUsers.length || ""}</span>
                     </button>
                   </div>
                   <div class="postButtonContainer red">
@@ -171,4 +325,42 @@ function timeDifference(current, previous) {
   } else {
     return Math.round(elapsed / msPerYear) + " years ago";
   }
+}
+
+// function which reacts html for the each element of the incoming array
+function outputPosts(results, container) {
+  // Clears every thing in the container
+  container.html("");
+
+  if (!Array.isArray(results)) results = [results];
+
+  // Checks for the the existance of the post if its empty
+  if (results.length == 0) {
+    return container.append("<span class='noResults'>Nothing to show</span>");
+  }
+
+  // uses the createPostHtml function to generate html for each post in the database
+  results.forEach((result) => {
+    const html = createPostHtml(result);
+    container.append(html);
+  });
+}
+
+function outputPostsWithReplies(results, container) {
+  // Clears every thing in the container
+  container.html("");
+
+  if (results.replyTo !== undefined && results.replyTo._id !== undefined) {
+    const html = createPostHtml(results.replyTo);
+    container.append(html);
+  }
+
+  const mainPostHtml = createPostHtml(results.postData, true);
+  container.append(mainPostHtml);
+
+  // uses the createPostHtml function to generate html for each post in the database
+  results.replies.forEach((result) => {
+    const html = createPostHtml(result);
+    container.append(html);
+  });
 }
